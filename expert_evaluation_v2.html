@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expert Evaluation — ML Flakiness Detection System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F1E35; --navy2: #1A2B4A;
+    --teal: #0D9488; --teal-lt: #CCFBF1;
+    --red: #DC2626; --red-lt: #FEE2E2;
+    --green: #16A34A; --green-lt: #DCFCE7;
+    --amber: #D97706; --amber-lt: #FEF3C7;
+    --gray-50: #F8FAFC; --gray-100: #F1F5F9; --gray-200: #E2E8F0;
+    --gray-300: #CBD5E1; --gray-400: #94A3B8; --gray-500: #64748B;
+    --gray-600: #475569; --gray-700: #334155; --gray-800: #1E293B;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--gray-50); color: var(--gray-800); min-height: 100vh; }
+
+  .hero { background: var(--navy); padding: 48px 0 36px; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 320px; height: 320px; border-radius: 50%; border: 1px solid rgba(13,148,136,0.15); }
+  .hero::after { content: ''; position: absolute; top: -20px; right: -20px; width: 200px; height: 200px; border-radius: 50%; border: 1px solid rgba(13,148,136,0.08); }
+  .container { max-width: 900px; margin: 0 auto; padding: 0 28px; }
+  .hero-tag { display: inline-flex; align-items: center; gap: 6px; background: rgba(13,148,136,0.15); border: 1px solid rgba(13,148,136,0.3); color: #5EEAD4; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; padding: 5px 12px; border-radius: 20px; margin-bottom: 18px; }
+  .hero h1 { font-size: 30px; font-weight: 600; color: var(--white); line-height: 1.2; margin-bottom: 10px; }
+  .hero h1 span { color: var(--teal); }
+  .hero-sub { font-size: 14px; color: var(--gray-400); line-height: 1.6; max-width: 540px; margin-bottom: 24px; }
+  .hero-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .meta-chip { font-size: 12px; color: var(--gray-400); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 5px 12px; border-radius: 6px; font-family: 'DM Mono', monospace; }
+  .eval-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--teal); color: var(--white); font-size: 14px; font-weight: 500; padding: 11px 22px; border-radius: 8px; text-decoration: none; transition: background 0.15s; }
+  .eval-btn:hover { background: #0A7268; }
+  .eval-btn svg { width: 16px; height: 16px; }
+
+  .instructions { background: var(--white); border-bottom: 1px solid var(--gray-200); padding: 22px 0; }
+  .instr-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .instr-item { display: flex; gap: 12px; align-items: flex-start; }
+  .instr-num { width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: var(--white); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .instr-text { font-size: 13px; color: var(--gray-600); line-height: 1.5; }
+  .instr-text strong { color: var(--gray-800); font-weight: 500; display: block; margin-bottom: 2px; }
+
+  .controls { padding: 18px 0 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .filter-btn { font-size: 12px; padding: 6px 16px; border-radius: 20px; border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-600); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .filter-btn:hover { border-color: var(--gray-300); }
+  .filter-btn.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .filter-btn.flaky-f.active { background: var(--red); border-color: var(--red); }
+  .filter-btn.stable-f.active { background: var(--green); border-color: var(--green); }
+  .controls-right { margin-left: auto; font-size: 12px; color: var(--gray-400); font-family: 'DM Mono', monospace; }
+
+  .cards { padding: 16px 0; display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
+  .tc-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; }
+  .tc-card.flaky-card { border-left: 3px solid var(--red); }
+  .tc-card.stable-card { border-left: 3px solid var(--green); }
+
+  .tc-header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; cursor: pointer; user-select: none; }
+  .tc-id { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gray-400); min-width: 30px; }
+  .tc-info { flex: 1; }
+  .tc-name { font-size: 13px; font-weight: 500; color: var(--gray-800); font-family: 'DM Mono', monospace; }
+  .tc-suite { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+  .tc-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
+  .badge-flaky { background: var(--red-lt); color: var(--red); }
+  .badge-stable { background: var(--green-lt); color: var(--green); }
+  .tc-conf { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gray-400); background: var(--gray-100); padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+  .tc-chevron { color: var(--gray-300); font-size: 12px; transition: transform 0.2s; }
+  .tc-chevron.open { transform: rotate(180deg); }
+
+  .tc-body { display: none; border-top: 1px solid var(--gray-100); }
+  .tc-body.open { display: block; }
+  .tc-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .tc-col { padding: 16px 20px; }
+  .tc-col:first-child { border-right: 1px solid var(--gray-100); }
+  .col-title { font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--gray-400); margin-bottom: 10px; }
+
+  .hist-dots { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 7px; }
+  .dot { width: 15px; height: 15px; border-radius: 3px; }
+  .dot-pass { background: var(--green); }
+  .dot-fail { background: var(--red); }
+  .dot-legend { display: flex; gap: 12px; font-size: 11px; color: var(--gray-400); }
+  .dot-legend span { display: flex; align-items: center; gap: 4px; }
+  .dot-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .feat-table { width: 100%; border-collapse: collapse; }
+  .feat-table tr { border-bottom: 1px solid var(--gray-100); }
+  .feat-table tr:last-child { border-bottom: none; }
+  .feat-table td { padding: 5px 0; font-size: 12px; }
+  .feat-table td:first-child { color: var(--gray-500); width: 58%; }
+  .feat-table td:last-child { font-weight: 500; color: var(--gray-800); text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; }
+
+  .fi-section { padding: 0 20px 14px; border-bottom: 1px solid var(--gray-100); }
+  .fi-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .fi-label { font-size: 12px; color: var(--gray-600); width: 160px; flex-shrink: 0; }
+  .fi-track { flex: 1; height: 7px; background: var(--gray-100); border-radius: 4px; overflow: hidden; }
+  .fi-fill { height: 100%; border-radius: 4px; }
+  .fi-val { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gray-500); min-width: 30px; text-align: right; }
+
+  .reasoning { padding: 14px 20px; border-bottom: 1px solid var(--gray-100); }
+  .reason-list { display: flex; flex-direction: column; gap: 6px; }
+  .reason-item { display: flex; gap: 8px; font-size: 13px; color: var(--gray-700); line-height: 1.4; }
+  .r-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+
+  .expert-q { padding: 14px 20px; background: #F0FDF9; border-left: 4px solid var(--teal); margin: 0 20px 18px; border-radius: 0 8px 8px 0; }
+  .expert-q-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
+  .expert-q-text { font-size: 13px; color: var(--gray-700); line-height: 1.5; font-style: italic; }
+
+  /* PAGINATION */
+  .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 20px 0 50px; }
+  .pg-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-600); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .pg-btn:hover { border-color: var(--gray-300); background: var(--gray-50); }
+  .pg-btn.active { background: var(--navy); color: var(--white); border-color: var(--navy); font-weight: 600; }
+  .pg-btn.disabled { opacity: 0.35; cursor: not-allowed; }
+  .pg-info { font-size: 12px; color: var(--gray-400); font-family: 'DM Mono', monospace; padding: 0 8px; }
+
+  /* PROGRESS BAR */
+  .progress-bar { background: var(--white); border-bottom: 1px solid var(--gray-200); padding: 10px 0; }
+  .pg-track { height: 3px; background: var(--gray-100); border-radius: 2px; }
+  .pg-fill { height: 100%; background: var(--teal); border-radius: 2px; transition: width 0.3s; }
+  .pg-label { font-size: 11px; color: var(--gray-400); margin-top: 6px; font-family: 'DM Mono', monospace; }
+
+  .summary { background: var(--navy); padding: 24px 0; }
+  .sum-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 16px; }
+  .sum-card { text-align: center; }
+  .sum-num { font-size: 26px; font-weight: 600; color: var(--white); font-family: 'DM Mono', monospace; }
+  .sum-num.t { color: var(--teal); }
+  .sum-num.r { color: #FCA5A5; }
+  .sum-label { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+
+  .eval-footer { background: var(--teal); padding: 24px 0; text-align: center; }
+  .eval-footer h3 { font-size: 16px; font-weight: 500; color: var(--white); margin-bottom: 6px; }
+  .eval-footer p { font-size: 13px; color: rgba(255,255,255,0.75); margin-bottom: 14px; }
+  .eval-footer a { display: inline-flex; align-items: center; gap: 8px; background: var(--white); color: var(--teal); font-size: 14px; font-weight: 600; padding: 11px 24px; border-radius: 8px; text-decoration: none; }
+
+  @media (max-width: 640px) {
+    .tc-grid { grid-template-columns: 1fr; }
+    .tc-col:first-child { border-right: none; border-bottom: 1px solid var(--gray-100); }
+    .instr-grid { grid-template-columns: 1fr; }
+    .sum-grid { grid-template-columns: repeat(3,1fr); }
+    .hero h1 { font-size: 22px; }
+    .fi-label { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="container">
+    <div class="hero-tag">Master's Thesis · Cairo University · FCAI</div>
+    <h1>ML-Based Detection of<br><span>Test Automation Flakiness</span></h1>
+    <p class="hero-sub">Expert Evaluation Package — Random Forest Model. Review all 50 test cases, examine model predictions, then complete the evaluation form.</p>
+    <div class="hero-meta">
+      <span class="meta-chip">50 test cases</span>
+      <span class="meta-chip">Random Forest classifier</span>
+      <span class="meta-chip">Selenium + Java dataset</span>
+      <span class="meta-chip">Est. review time: 20–25 min</span>
+    </div>
+    <a class="eval-btn" href="https://forms.gle/YyfiwcL4iEhr8ReB8" target="_blank">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Open Evaluation Form
+    </a>
+  </div>
+</div>
+
+<div class="instructions">
+  <div class="container">
+    <div class="instr-grid">
+      <div class="instr-item"><div class="instr-num">1</div><div class="instr-text"><strong>Review all 50 test cases</strong>Navigate through 5 pages of 10 cases each. Expand each card to see full details.</div></div>
+      <div class="instr-item"><div class="instr-num">2</div><div class="instr-text"><strong>Reflect on each question</strong>Each case has a specific expert question — consider your professional opinion before filling the form.</div></div>
+      <div class="instr-item"><div class="instr-num">3</div><div class="instr-text"><strong>Complete the evaluation form</strong>After reviewing the cases, click the green button above or below to open the Google Form.</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="progress-bar">
+  <div class="container">
+    <div class="pg-track"><div class="pg-fill" id="pg-fill" style="width:20%"></div></div>
+    <div class="pg-label" id="pg-label">Page 1 of 5 — Cases 1–10</div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="controls">
+    <button class="filter-btn active" onclick="setFilter('all',this)">All (50)</button>
+    <button class="filter-btn flaky-f" onclick="setFilter('flaky',this)">Flaky (25)</button>
+    <button class="filter-btn stable-f" onclick="setFilter('stable',this)">Stable (25)</button>
+    <div class="controls-right" id="count-label">Showing cases 1–10</div>
+  </div>
+  <div class="cards" id="cards"></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<div class="summary">
+  <div class="container">
+    <div class="sum-grid">
+      <div class="sum-card"><div class="sum-num">50</div><div class="sum-label">Total test cases</div></div>
+      <div class="sum-card"><div class="sum-num r">25</div><div class="sum-label">Predicted flaky</div></div>
+      <div class="sum-card"><div class="sum-num t">25</div><div class="sum-label">Predicted stable</div></div>
+      <div class="sum-card"><div class="sum-num t">88%</div><div class="sum-label">Avg RF confidence</div></div>
+      <div class="sum-card"><div class="sum-num t">6</div><div class="sum-label">Test suites</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="eval-footer">
+  <h3>Ready to evaluate?</h3>
+  <p>After reviewing the test cases above, please complete the expert evaluation questionnaire.</p>
+  <a href="https://forms.gle/YyfiwcL4iEhr8ReB8" target="_blank">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    Open Google Form Evaluation
+  </a>
+</div>
+
+<script>
+const SUITES = ["AuthSuite","PaymentSuite","SearchSuite","UserSuite","CartSuite","AdminSuite","NotifSuite","ReportSuite"];
+const PATTERNS_FLAKY = ["Non-deterministic","Intermittent","UI timing / DOM race","External service dependency","Data volume dependent","Network latency dependent","Async race condition","Thread contention","Environment-sensitive","Resource contention"];
+const PATTERNS_STABLE = ["None","1 isolated failure","2 isolated failures","Consistently passing","No failure pattern"];
+const QUESTIONS_FLAKY = [
+  "Does the combination of high variance and low pass rate match your definition of a flaky test in production CI?",
+  "Would you quarantine this test or investigate further before making a decision?",
+  "The model confidence is relatively lower here — does the borderline prediction seem reasonable?",
+  "Would you immediately remove this from the CI pipeline or attempt to fix it first?",
+  "High async calls point to an external service — is this a test design problem or an infrastructure problem?",
+  "Does the async/UI root cause seem correctly identified by the model?",
+  "Is this a flakiness problem or a performance/test design problem needing a different solution?",
+  "All features strongly signal flakiness — does the model reasoning align with your experience?",
+  "Would you trust this classification enough to act on it without further investigation?",
+  "Does the failure pattern here suggest a fixable root cause or fundamental test instability?"
+];
+const QUESTIONS_STABLE = [
+  "Would you trust this test result as a CI gate blocker without manual review?",
+  "One or two isolated failures — does the model correctly label this as stable?",
+  "Does ±variance seem acceptable for this type of test in your experience?",
+  "Does classifying this as stable seem correct despite the async calls present?",
+  "Would you rely on this test's green result to approve a production deployment?"
+];
+
+function seededRand(seed) {
+  let s = seed;
+  return function() { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+
+function generateHistory(passRate, rand) {
+  return Array.from({length:20}, () => rand() < passRate/100 ? 1 : 0);
+}
+
+function generateTests() {
+  const tests = [];
+  const rand = seededRand(42);
+  const suiteNames = ["LoginTest","CheckoutTest","SearchTest","ProfileTest","CartTest","AdminTest","NotifTest","ReportTest","AuthTest","PaymentTest"];
+  const actionNames = ["ValidCredentials","PaymentFlow","FilterByCategory","UpdateAvatar","AddMultipleItems","ExportUserData","EmailTrigger","GeneratePDF","TokenRefresh","BulkUpload","ResetPassword","ProductSearch","UpdateSettings","DeleteAccount","ApplyCoupon","TrackOrder","ChangePassword","ViewHistory","RefreshToken","SubmitFeedback","ValidateAddress","LoadDashboard","ArchiveItems","SortResults","MergeAccounts","CheckInventory","ScheduleReport","BatchProcess","SyncData","ValidateInput"];
+
+  // 50-50: alternating flaky/stable then shuffle
+  const labels = [];
+  for(let i=0;i<25;i++) labels.push('flaky');
+  for(let i=0;i<25;i++) labels.push('stable');
+  // Fisher-Yates shuffle with seeded rand
+  for(let i=labels.length-1;i>0;i--) {
+    const j = Math.floor(rand()*(i+1));
+    [labels[i],labels[j]] = [labels[j],labels[i]];
+  }
+
+  for(let i=1; i<=50; i++) {
+    const isFlaky = labels[i-1] === 'flaky';
+    const suite = SUITES[Math.floor(rand()*SUITES.length)];
+    const baseName = suiteNames[Math.floor(rand()*suiteNames.length)];
+    const action = actionNames[Math.floor(rand()*actionNames.length)];
+    const name = `${baseName}_${action}`;
+
+    let passRate, durAvg, durVar, reruns, asyncCalls, envDeps, conf;
+    if(isFlaky) {
+      passRate = Math.floor(rand()*35)+45; // 45-80%
+      durAvg = Math.floor(rand()*5000)+800;
+      durVar = Math.floor(rand()*2500)+600;
+      reruns = Math.floor(rand()*20)+5;
+      asyncCalls = Math.floor(rand()*5)+2;
+      envDeps = Math.floor(rand()*4)+2;
+      conf = Math.floor(rand()*18)+78; // 78-96%
+    } else {
+      passRate = Math.floor(rand()*8)+92; // 92-100%
+      durAvg = Math.floor(rand()*2500)+400;
+      durVar = Math.floor(rand()*180)+30;
+      reruns = Math.floor(rand()*2);
+      asyncCalls = Math.floor(rand()*2)+1;
+      envDeps = Math.floor(rand()*2)+1;
+      conf = Math.floor(rand()*8)+90; // 90-98%
+    }
+
+    const history = generateHistory(passRate, rand);
+    const pattern = isFlaky
+      ? PATTERNS_FLAKY[Math.floor(rand()*PATTERNS_FLAKY.length)]
+      : PATTERNS_STABLE[Math.floor(rand()*PATTERNS_STABLE.length)];
+
+    const fiBase = isFlaky
+      ? [Math.floor(rand()*30)+60, Math.floor(rand()*30)+55, Math.floor(rand()*25)+45, Math.floor(rand()*30)+30]
+      : [Math.floor(rand()*15)+2, Math.floor(rand()*12)+2, Math.floor(rand()*15)+5, Math.floor(rand()*15)+5];
+
+    const fi = [
+      {l:"Duration variance", p: fiBase[0]},
+      {l:"Pass rate", p: fiBase[1]},
+      {l:"Re-run count", p: fiBase[2]},
+      {l:"Async calls", p: fiBase[3]}
+    ];
+
+    let reasons, question;
+    if(isFlaky) {
+      reasons = [
+        `Pass rate of ${passRate}% is ${passRate < 60 ? 'critically' : 'significantly'} below the 80% stability threshold`,
+        `Duration variance of ±${durVar.toLocaleString()}ms indicates non-deterministic execution behavior`,
+        `${reruns} re-runs in CI history confirm repeated intermittent failures across builds`,
+        `${asyncCalls} async calls${envDeps > 2 ? ` combined with ${envDeps} env dependencies` : ''} increase race condition risk`
+      ];
+      question = QUESTIONS_FLAKY[Math.floor(rand()*QUESTIONS_FLAKY.length)];
+    } else {
+      reasons = [
+        `${passRate}% pass rate${reruns === 0 ? ' with zero re-runs' : ` with only ${reruns} isolated failure${reruns>1?'s':''}`} indicates high stability`,
+        `Duration variance of ±${durVar}ms is negligible — execution is consistent and deterministic`,
+        `${asyncCalls} async call${asyncCalls>1?'s':''} with minimal env dependency keeps flakiness risk low`,
+        reruns === 0 ? `No failure pattern detected — test passes reliably across all observed runs` : `Re-run confirmed failure was transient and not reproducible`
+      ];
+      question = QUESTIONS_STABLE[Math.floor(rand()*QUESTIONS_STABLE.length)];
+    }
+
+    tests.push({
+      id: i, name, suite,
+      label: isFlaky ? 'flaky' : 'stable',
+      conf,
+      history,
+      features: {
+        "Pass rate (20 runs)": `${passRate}%`,
+        "Avg duration": `${durAvg.toLocaleString()} ms`,
+        "Duration variance": `±${durVar.toLocaleString()} ms`,
+        "Re-run count": `${reruns}`,
+        "Async calls": `${asyncCalls}`,
+        "Env dependencies": `${envDeps}`,
+        "Failure pattern": pattern
+      },
+      fi, reasons, question
+    });
+  }
+  return tests;
+}
+
+const ALL_TESTS = generateTests();
+let currentFilter = 'all';
+let currentPage = 1;
+const PAGE_SIZE = 10;
+
+function getFiltered() {
+  if(currentFilter === 'all') return ALL_TESTS;
+  return ALL_TESTS.filter(t => t.label === currentFilter);
+}
+
+function buildDots(hist) {
+  return hist.map(h => `<div class="dot ${h?'dot-pass':'dot-fail'}"></div>`).join('');
+}
+
+function buildCard(t) {
+  const isFlaky = t.label === 'flaky';
+  const dc = isFlaky ? '#DC2626' : '#16A34A';
+  const feats = Object.entries(t.features).map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  const fiRows = t.fi.map(f =>
+    `<div class="fi-row"><div class="fi-label">${f.l}</div><div class="fi-track"><div class="fi-fill" style="width:${f.p}%;background:${dc}"></div></div><div class="fi-val">${f.p}%</div></div>`).join('');
+  const reasons = t.reasons.map(r =>
+    `<div class="reason-item"><div class="r-dot" style="background:${dc}"></div>${r}</div>`).join('');
+
+  return `<div class="tc-card ${isFlaky?'flaky-card':'stable-card'}" data-label="${t.label}" id="card${t.id}">
+    <div class="tc-header" onclick="toggle(${t.id})">
+      <span class="tc-id">#${String(t.id).padStart(2,'0')}</span>
+      <div class="tc-info">
+        <div class="tc-name">${t.name}</div>
+        <div class="tc-suite">${t.suite}</div>
+      </div>
+      <span class="tc-badge ${isFlaky?'badge-flaky':'badge-stable'}">${isFlaky?'FLAKY':'STABLE'}</span>
+      <span class="tc-conf">RF ${t.conf}%</span>
+      <span class="tc-chevron" id="chev${t.id}">▼</span>
+    </div>
+    <div class="tc-body" id="body${t.id}">
+      <div class="tc-grid">
+        <div class="tc-col">
+          <div class="col-title">Execution history — last 20 runs</div>
+          <div class="hist-dots">${buildDots(t.history)}</div>
+          <div class="dot-legend"><span><i style="background:#16A34A"></i>Pass</span><span><i style="background:#DC2626"></i>Fail</span></div>
+        </div>
+        <div class="tc-col">
+          <div class="col-title">Feature values</div>
+          <table class="feat-table">${feats}</table>
+        </div>
+      </div>
+      <div class="fi-section">
+        <div class="col-title" style="margin-bottom:10px">Random Forest — feature importance contribution</div>
+        ${fiRows}
+      </div>
+      <div class="reasoning">
+        <div class="col-title" style="margin-bottom:8px">Why the model predicted <strong>${isFlaky?'Flaky':'Stable'}</strong></div>
+        <div class="reason-list">${reasons}</div>
+      </div>
+      <div class="expert-q">
+        <div class="expert-q-label">Question for you</div>
+        <div class="expert-q-text">${t.question}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const filtered = getFiltered();
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  if(currentPage > totalPages) currentPage = 1;
+
+  const start = (currentPage-1)*PAGE_SIZE;
+  const end = Math.min(start+PAGE_SIZE, filtered.length);
+  const pageTests = filtered.slice(start, end);
+
+  document.getElementById('cards').innerHTML = pageTests.map(buildCard).join('');
+  document.getElementById('count-label').textContent =
+    filtered.length === ALL_TESTS.length
+      ? `Cases ${start+1}–${end} of ${filtered.length}`
+      : `${filtered.length} ${currentFilter} cases — showing ${start+1}–${end}`;
+
+  const pct = Math.round((currentPage/totalPages)*100);
+  document.getElementById('pg-fill').style.width = pct+'%';
+  document.getElementById('pg-label').textContent =
+    `Page ${currentPage} of ${totalPages} — Cases ${start+1}–${end}`;
+
+  buildPagination(totalPages);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function buildPagination(total) {
+  const pg = document.getElementById('pagination');
+  let html = `<button class="pg-btn ${currentPage===1?'disabled':''}" onclick="goPage(${currentPage-1})">&#8592;</button>`;
+  for(let i=1;i<=total;i++) {
+    html += `<button class="pg-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  html += `<button class="pg-btn ${currentPage===total?'disabled':''}" onclick="goPage(${currentPage+1})">&#8594;</button>`;
+  html += `<span class="pg-info">${currentPage}/${total}</span>`;
+  pg.innerHTML = html;
+}
+
+function goPage(n) {
+  const filtered = getFiltered();
+  const total = Math.ceil(filtered.length/PAGE_SIZE);
+  if(n<1||n>total) return;
+  currentPage = n;
+  render();
+}
+
+function setFilter(type, btn) {
+  currentFilter = type;
+  currentPage = 1;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function toggle(id) {
+  const body = document.getElementById('body'+id);
+  const chev = document.getElementById('chev'+id);
+  const open = body.classList.toggle('open');
+  chev.classList.toggle('open', open);
+}
+
+render();
+</script>
+</body>
+</html>
